@@ -1,0 +1,20 @@
+name: Build S3-NATIVE-AI Firmware
+on: [push, workflow_dispatch]
+env:
+  MICROPYTHON_VERSION: v1.27.0
+  ESP_IDF_VERSION: v5.5.1
+  BOARD: ESP32_S3_N16R8
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.10' }
+      - run: sudo apt-get update && sudo apt-get install -y git wget flex bison gperf python3-pip cmake ninja-build ccache libffi-dev libssl-dev dfu-util libusb-1.0-0
+      - run: git clone --depth 1 --branch ${{ env.MICROPYTHON_VERSION }} https://github.com/micropython/micropython.git && cd micropython && git submodule update --init --depth 1 lib/axtls lib/berkeley-db-1.xx lib/mbedtls lib/micropython-lib
+      - run: git clone --depth 1 --branch ${{ env.ESP_IDF_VERSION }} https://github.com/espressif/esp-idf.git && cd esp-idf && ./install.sh esp32s3
+      - run: mkdir -p micropython/ports/esp32/boards/${{ env.BOARD }} && cp -r boards/${{ env.BOARD }}/* micropython/ports/esp32/boards/${{ env.BOARD }}/
+      - run: source $GITHUB_WORKSPACE/esp-idf/export.sh && cd $GITHUB_WORKSPACE/micropython/ports/esp32 && make BOARD=${{ env.BOARD }} USER_C_MODULES=../../../micropython.cmake clean && make BOARD=${{ env.BOARD }} USER_C_MODULES=../../../micropython.cmake -j4
+      - uses: actions/upload-artifact@v4
+        with: { name: s3-native-ai-firmware-${{ env.BOARD }}, path: micropython/ports/esp32/build-${{ env.BOARD }}/firmware.bin }
