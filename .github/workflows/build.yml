@@ -51,20 +51,20 @@ jobs:
           source $GITHUB_WORKSPACE/esp-idf/export.sh
           cd $GITHUB_WORKSPACE/micropython/ports/esp32
           
-          # CORRECCIÓN: Apuntar directamente al ARCHIVO micropython.cmake
           export USER_C_MODULES_FILE=${{ github.workspace }}/micropython.cmake
           
           make BOARD=${{ env.BOARD }} USER_C_MODULES=${USER_C_MODULES_FILE} clean || true
           
-          if ! make BOARD=${{ env.BOARD }} USER_C_MODULES=${USER_C_MODULES_FILE} -j4; then
+          # Ejecutar make y guardar TODA la salida en un archivo de log
+          if ! make BOARD=${{ env.BOARD }} USER_C_MODULES=${USER_C_MODULES_FILE} > build_output.log 2>&1; then
             echo "========================================================"
-            echo "¡ERROR DE COMPILACIÓN DETECTADO!"
-            echo "Mostrando los logs de CMake para depuración:"
+            echo "❌ ERROR DE COMPILACIÓN DETECTADO"
             echo "========================================================"
-            cat build-${{ env.BOARD }}/log/idf_py_stderr_output_* || echo "No stderr log"
-            cat build-${{ env.BOARD }}/log/idf_py_stdout_output_* || echo "No stdout log"
+            echo "ÚLTIMAS 60 LÍNEAS DEL LOG DE COMPILACIÓN:"
             echo "========================================================"
-            echo "FIN DE LOS LOGS DE ERROR"
+            tail -n 60 build_output.log
+            echo "========================================================"
+            echo "FIN DEL LOG"
             echo "========================================================"
             exit 1
           fi

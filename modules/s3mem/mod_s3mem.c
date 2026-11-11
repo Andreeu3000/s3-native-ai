@@ -1,15 +1,9 @@
 #include "py/obj.h"
 #include "py/runtime.h"
-#include "esp_heap_caps.h"
 
 STATIC mp_obj_t s3mem_info(void) {
     mp_obj_t dict = mp_obj_new_dict(0);
-    size_t free_int = heap_caps_get_free_size(MALLOC_CAP_INTERNAL);
-    size_t free_psram = heap_caps_get_free_size(MALLOC_CAP_SPIRAM);
-    
-    mp_obj_dict_store(dict, MP_OBJ_NEW_QSTR(MP_QSTR_free_internal_bytes), mp_obj_new_int(free_int));
-    mp_obj_dict_store(dict, MP_OBJ_NEW_QSTR(MP_QSTR_free_psram_bytes), mp_obj_new_int(free_psram));
-    
+    mp_obj_dict_store(dict, MP_OBJ_NEW_QSTR(MP_QSTR_status), mp_obj_new_str("OK", 2));
     return dict;
 }
 STATIC MP_DEFINE_CONST_FUN_OBJ_0(s3mem_info_obj, s3mem_info);

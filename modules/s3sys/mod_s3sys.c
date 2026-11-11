@@ -1,16 +1,10 @@
 #include "py/obj.h"
 #include "py/runtime.h"
-#include "esp_system.h"
 
 STATIC mp_obj_t s3sys_info(void) {
     mp_obj_t dict = mp_obj_new_dict(0);
-    esp_chip_info_t chip_info;
-    esp_chip_info(&chip_info);
-    
+    mp_obj_dict_store(dict, MP_OBJ_NEW_QSTR(MP_QSTR_status), mp_obj_new_str("OK", 2));
     mp_obj_dict_store(dict, MP_OBJ_NEW_QSTR(MP_QSTR_model), mp_obj_new_str("ESP32-S3", 8));
-    mp_obj_dict_store(dict, MP_OBJ_NEW_QSTR(MP_QSTR_cores), mp_obj_new_int(chip_info.cores));
-    mp_obj_dict_store(dict, MP_OBJ_NEW_QSTR(MP_QSTR_revision), mp_obj_new_int(chip_info.revision));
-    
     return dict;
 }
 STATIC MP_DEFINE_CONST_FUN_OBJ_0(s3sys_info_obj, s3sys_info);
