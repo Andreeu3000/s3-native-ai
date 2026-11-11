@@ -6,7 +6,6 @@ on:
   workflow_dispatch:
 
 env:
-  # Versiones oficialmente compatibles y estables para el puerto ESP32 de MicroPython
   MICROPYTHON_VERSION: v1.24.0
   ESP_IDF_VERSION: v5.3.2
   BOARD: ESP32_S3_N16R8
@@ -45,18 +44,35 @@ jobs:
         run: |
           mkdir -p micropython/ports/esp32/boards/${{ env.BOARD }}
           cp -r boards/${{ env.BOARD }}/* micropython/ports/esp32/boards/${{ env.BOARD }}/
-          # Copiar la tabla de particiones a la raíz del puerto esp32 (requerido por ESP-IDF)
           cp boards/${{ env.BOARD }}/partitions-16MB.csv micropython/ports/esp32/
-          # Copiar el archivo cmake a la carpeta del board para referencia de directorio
-          cp micropython.cmake micropython/ports/esp32/boards/${{ env.BOARD }}/
+          
+          echo "=== Verificando archivos ==="
+          ls -la micropython/ports/esp32/boards/${{ env.BOARD }}/
+          ls -la micropython/ports/esp32/partitions-16MB.csv
 
       - name: Build MicroPython firmware
         run: |
           source $GITHUB_WORKSPACE/esp-idf/export.sh
           cd $GITHUB_WORKSPACE/micropython/ports/esp32
-          # Apuntar USER_C_MODULES al DIRECTORIO del board, como indica la docs oficial de MicroPython
-          make BOARD=${{ env.BOARD }} USER_C_MODULES=boards/${{ env.BOARD }} clean
-          make BOARD=${{ env.BOARD }} USER_C_MODULES=boards/${{ env.BOARD }} -j4
+          
+          # USAR RUTA ABSOLUTA DE LA RAÍZ DEL REPOSITORIO
+          export USER_C_MODULES_DIR=${{ github.workspace }}
+          
+          make BOARD=${{ env.BOARD }} USER_C_MODULES=${USER_C_MODULES_DIR} clean || true
+          
+          # Si falla, mostrar automáticamente los logs de error de CMake
+          if ! make BOARD=${{ env.BOARD }} USER_C_MODULES=${USER_C_MODULES_DIR} -j4; then
+            echo "========================================================"
+            echo "¡ERROR DE COMPILACIÓN DETECTADO!"
+            echo "Mostrando los logs de CMake para depuración:"
+            echo "========================================================"
+            cat build-${{ env.BOARD }}/log/idf_py_stderr_output_* || echo "No stderr log"
+            cat build-${{ env.BOARD }}/log/idf_py_stdout_output_* || echo "No stdout log"
+            echo "========================================================"
+            echo "FIN DE LOS LOGS DE ERROR"
+            echo "========================================================"
+            exit 1
+          fi
 
       - name: Upload firmware artifact
         uses: actions/upload-artifact@v4
