@@ -1,4 +1,4 @@
-name: Build S3-NATIVE-AI (2 fases)
+name: Build S3-NATIVE-AI
 
 on:
   push:
@@ -6,17 +6,19 @@ on:
   workflow_dispatch:
     inputs:
       build_modules:
-        description: 'Compilar módulos C (Fase 2)'
-        type: boolean
-        default: false
+        description: Fase 2
+        type: choice
+        options:
+          - "false"
+          - "true"
+        default: "false"
 
 env:
   MICROPYTHON_VERSION: v1.24.0
   ESP_IDF_VERSION: v5.2.2
   BOARD: ESP32_S3_N16R8
   BOARD_VARIANT: spiram-oct
-  # Fase 1 por defecto: sin módulos. Cambia a "true" para Fase 2.
-  BUILD_MODULES: ${{ github.event.inputs.build_modules || 'false' }}
+
 
 jobs:
   build:
@@ -31,6 +33,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y git wget flex bison gperf python3-pip python3-venv \
             cmake ninja-build ccache libffi-dev libssl-dev dfu-util libusb-1.0-0
+
       - name: Clonar MicroPython
         run: |
           git clone --depth 1 --branch ${{ env.MICROPYTHON_VERSION }} \
@@ -41,6 +44,7 @@ jobs:
           git clone --depth 1 --branch ${{ env.ESP_IDF_VERSION }} \
             https://github.com/espressif/esp-idf.git
           cd esp-idf && ./install.sh esp32s3
+
       - name: Copiar board y particiones
         run: |
           mkdir -p micropython/ports/esp32/boards/${{ env.BOARD }}
@@ -48,29 +52,34 @@ jobs:
             micropython/ports/esp32/boards/${{ env.BOARD }}/
           cp boards/${{ env.BOARD }}/partitions-16MB.csv \
             micropython/ports/esp32/
+
       - name: Compilar firmware
+        env:
+          BUILD_MODULES: ${{ github.event.inputs.build_modules || 'false' }}
         run: |
           source $GITHUB_WORKSPACE/esp-idf/export.sh
           cd $GITHUB_WORKSPACE/micropython/ports/esp32
 
-          export USER_C_MODULES_FLAG=""
-          if [ "${{ env.BUILD_MODULES }}" = "true" ]; then
-            export USER_C_MODULES_FLAG="USER_C_MODULES=${{ github.workspace }}/micropython.cmake"
-            echo "🔧 FASE 2: compilando CON módulos C"
+          if [ "$BUILD_MODULES" = "true" ]; then
+            echo "FASE 2"
+            UCM="USER_C_MODULES=${{ github.workspace }}/micropython.cmake"
           else
-            echo "🧱 FASE 1: compilando SIN módulos (solo base)"
+            echo "FASE 1"
+            UCM=""
           fi
 
           make BOARD=${{ env.BOARD }} \
                BOARD_VARIANT=${{ env.BOARD_VARIANT }} \
-               $USER_C_MODULES_FLAG \
+               $UCM \
                > build_output.log 2>&1 || {
-            echo "❌ ERROR DE COMPILACIÓN"
+            echo "ERROR"
             tail -n 60 build_output.log
             exit 1
           }
+
       - name: Subir firmware
         uses: actions/upload-artifact@v4
         with:
-          name: s3-native-ai-${{ env.BOARD }}-${{ env.BUILD_MODULES }}
+          name: s3-native-ai-${{ env.BOARD }}
           path: micropython/ports/esp32/build-${{ env.BOARD }}/firmware.bin
+
