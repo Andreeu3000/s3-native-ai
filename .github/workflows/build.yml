@@ -6,8 +6,9 @@ on:
   workflow_dispatch:
 
 env:
-  MICROPYTHON_VERSION: v1.27.0
-  ESP_IDF_VERSION: v5.5.1
+  # Versiones oficialmente compatibles y estables para el puerto ESP32 de MicroPython
+  MICROPYTHON_VERSION: v1.24.0
+  ESP_IDF_VERSION: v5.3.2
   BOARD: ESP32_S3_N16R8
 
 jobs:
@@ -44,15 +45,18 @@ jobs:
         run: |
           mkdir -p micropython/ports/esp32/boards/${{ env.BOARD }}
           cp -r boards/${{ env.BOARD }}/* micropython/ports/esp32/boards/${{ env.BOARD }}/
+          # Copiar la tabla de particiones a la raíz del puerto esp32 (requerido por ESP-IDF)
           cp boards/${{ env.BOARD }}/partitions-16MB.csv micropython/ports/esp32/
+          # Copiar el archivo cmake a la carpeta del board para referencia de directorio
+          cp micropython.cmake micropython/ports/esp32/boards/${{ env.BOARD }}/
 
       - name: Build MicroPython firmware
         run: |
           source $GITHUB_WORKSPACE/esp-idf/export.sh
           cd $GITHUB_WORKSPACE/micropython/ports/esp32
-          # V=1 hace que la compilación sea verbosa y muestre el error exacto si falla
-          make BOARD=${{ env.BOARD }} USER_C_MODULES=${{ github.workspace }}/micropython.cmake clean
-          make BOARD=${{ env.BOARD }} USER_C_MODULES=${{ github.workspace }}/micropython.cmake V=1 -j4
+          # Apuntar USER_C_MODULES al DIRECTORIO del board, como indica la docs oficial de MicroPython
+          make BOARD=${{ env.BOARD }} USER_C_MODULES=boards/${{ env.BOARD }} clean
+          make BOARD=${{ env.BOARD }} USER_C_MODULES=boards/${{ env.BOARD }} -j4
 
       - name: Upload firmware artifact
         uses: actions/upload-artifact@v4
