@@ -42,18 +42,21 @@ jobs:
 
       - name: Prepare custom board configuration
         run: |
+          # Crear directorio del board y copiar archivos
           mkdir -p micropython/ports/esp32/boards/${{ env.BOARD }}
           cp -r boards/${{ env.BOARD }}/* micropython/ports/esp32/boards/${{ env.BOARD }}/
-          # Copiamos el archivo de módulos a la carpeta del board para evitar errores de ruta relativa
-          cp $GITHUB_WORKSPACE/micropython.cmake micropython/ports/esp32/boards/${{ env.BOARD }}/usermod.cmake
+          
+          # CORRECCIÓN CRÍTICA 1: Mover la tabla de particiones a la raíz de esp32
+          cp boards/${{ env.BOARD }}/partitions-16MB.csv micropython/ports/esp32/
 
       - name: Build MicroPython firmware
         run: |
           source $GITHUB_WORKSPACE/esp-idf/export.sh
           cd $GITHUB_WORKSPACE/micropython/ports/esp32
-          # Usamos la ruta relativa segura desde la carpeta esp32 hacia la carpeta del board
-          make BOARD=${{ env.BOARD }} USER_C_MODULES=boards/${{ env.BOARD }}/usermod.cmake clean
-          make BOARD=${{ env.BOARD }} USER_C_MODULES=boards/${{ env.BOARD }}/usermod.cmake -j4
+          
+          # CORRECCIÓN CRÍTICA 2: Usar ruta absoluta de GitHub para USER_C_MODULES
+          make BOARD=${{ env.BOARD }} USER_C_MODULES=${{ github.workspace }}/micropython.cmake clean
+          make BOARD=${{ env.BOARD }} USER_C_MODULES=${{ github.workspace }}/micropython.cmake -j4
 
       - name: Upload firmware artifact
         uses: actions/upload-artifact@v4
