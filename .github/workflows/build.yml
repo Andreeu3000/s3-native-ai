@@ -45,23 +45,18 @@ jobs:
           mkdir -p micropython/ports/esp32/boards/${{ env.BOARD }}
           cp -r boards/${{ env.BOARD }}/* micropython/ports/esp32/boards/${{ env.BOARD }}/
           cp boards/${{ env.BOARD }}/partitions-16MB.csv micropython/ports/esp32/
-          
-          echo "=== Verificando archivos ==="
-          ls -la micropython/ports/esp32/boards/${{ env.BOARD }}/
-          ls -la micropython/ports/esp32/partitions-16MB.csv
 
       - name: Build MicroPython firmware
         run: |
           source $GITHUB_WORKSPACE/esp-idf/export.sh
           cd $GITHUB_WORKSPACE/micropython/ports/esp32
           
-          # USAR RUTA ABSOLUTA DE LA RAÍZ DEL REPOSITORIO
-          export USER_C_MODULES_DIR=${{ github.workspace }}
+          # CORRECCIÓN: Apuntar directamente al ARCHIVO micropython.cmake
+          export USER_C_MODULES_FILE=${{ github.workspace }}/micropython.cmake
           
-          make BOARD=${{ env.BOARD }} USER_C_MODULES=${USER_C_MODULES_DIR} clean || true
+          make BOARD=${{ env.BOARD }} USER_C_MODULES=${USER_C_MODULES_FILE} clean || true
           
-          # Si falla, mostrar automáticamente los logs de error de CMake
-          if ! make BOARD=${{ env.BOARD }} USER_C_MODULES=${USER_C_MODULES_DIR} -j4; then
+          if ! make BOARD=${{ env.BOARD }} USER_C_MODULES=${USER_C_MODULES_FILE} -j4; then
             echo "========================================================"
             echo "¡ERROR DE COMPILACIÓN DETECTADO!"
             echo "Mostrando los logs de CMake para depuración:"
