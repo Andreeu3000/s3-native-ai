@@ -15,8 +15,11 @@ jobs:
   build:
     runs-on: ubuntu-22.04
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
         with:
           python-version: '3.10'
 
@@ -26,6 +29,23 @@ jobs:
           sudo apt-get install -y git wget flex bison gperf python3-pip python3-venv \
             cmake ninja-build ccache libffi-dev libssl-dev dfu-util libusb-1.0-0
 
+      # ---------------------------------------------------------
+      # CACHÉ: Esto evita descargar ESP-IDF y recompilar todo cada vez
+      # ---------------------------------------------------------
+      - name: Cache ESP-IDF and Tools
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.espressif
+            ~/esp-idf
+          key: esp-idf-${{ env.ESP_IDF_VERSION }}-${{ runner.os }}
+
+      - name: Cache ccache
+        uses: actions/cache@v4
+        with:
+          path: ~/.ccache
+          key: ccache-${{ env.BOARD }}-${{ hashFiles('modules/**') }}
+
       - name: Clone MicroPython
         run: |
           git clone --depth 1 --branch ${{ env.MICROPYTHON_VERSION }} https://github.com/micropython/micropython.git
@@ -33,8 +53,13 @@ jobs:
 
       - name: Clone and setup ESP-IDF
         run: |
-          git clone --depth 1 --branch ${{ env.ESP_IDF_VERSION }} https://github.com/espressif/esp-idf.git
-          cd esp-idf && ./install.sh esp32s3
+          if [ ! -d "$HOME/esp-idf" ]; then
+            git clone --depth 1 --branch ${{ env.ESP_IDF_VERSION }} https://github.com/espressif/esp-idf.git $HOME/esp-idf
+            cd $HOME/esp-idf && ./install.sh esp32s3
+          else
+            echo "ESP-IDF ya está en caché."
+            cd $HOME/esp-idf && ./install.sh esp32s3
+          fi
 
       - name: Prepare custom board configuration
         run: |
@@ -44,31 +69,52 @@ jobs:
 
       - name: Build MicroPython firmware
         run: |
-          source $GITHUB_WORKSPACE/esp-idf/export.sh
+          source $HOME/esp-idf/export.sh
           cd $GITHUB_WORKSPACE/micropython/ports/esp32
+          
+          # Apuntamos al archivo micropython.cmake en la raíz del repo
           export USER_C_MODULES_FILE=${{ github.workspace }}/micropython.cmake
-
+          
+          # Habilitar ccache para acelerar
+          export IDF_CCACHE_ENABLE=1
+          
           make BOARD=${{ env.BOARD }} \
                BOARD_VARIANT=${{ env.BOARD_VARIANT }} \
                USER_C_MODULES=${USER_C_MODULES_FILE} \
                clean || true
-
+               
           if ! make BOARD=${{ env.BOARD }} \
                     BOARD_VARIANT=${{ env.BOARD_VARIANT }} \
                     USER_C_MODULES=${USER_C_MODULES_FILE} \
-                    > build_output.log 2>&1; then
+                    -j$(nproc) > build_output.log 2>&1; then
             echo "========================================================"
-            echo "ERROR DE COMPILACION DETECTADO"
+            echo "❌ ERROR DE COMPILACIÓN DETECTADO"
             echo "========================================================"
-            tail -n 80 build_output.log
+            tail -n 100 build_output.log
             echo "========================================================"
             echo "FIN DEL LOG"
             echo "========================================================"
             exit 1
           fi
 
-      - name: Upload firmware artifact
+      - name: Generate Flash Command Helper
+        run: |
+          BUILD_DIR="micropython/ports/esp32/build-${{ env.BOARD }}"
+          cat << 'CMD' > $BUILD_DIR/FLASH_COMMAND.txt
+          esptool.py --chip esp32s3 -p /dev/ttyUSB0 -b 460800 \
+            --before default_reset --after hard_reset \
+            write_flash --flash_mode dio --flash_size 16MB --flash_freq 80m \
+            0x0 bootloader.bin \
+            0x8000 partition-table.bin \
+            0x10000 firmware.bin
+          CMD
+
+      - name: Upload all firmware artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: s3-native-ai-firmware-${{ env.BOARD }}
-          path: micropython/ports/esp32/build-${{ env.BOARD }}/firmware.bin
+          name: s3-native-ai-binarios-${{ env.BOARD }}
+          path: |
+            micropython/ports/esp32/build-${{ env.BOARD }}/firmware.bin
+            micropython/ports/esp32/build-${{ env.BOARD }}/bootloader.bin
+            micropython/ports/esp32/build-${{ env.BOARD }}/partition-table.bin
+            micropython/ports/esp32/build-${{ env.BOARD }}/FLASH_COMMAND.txt
