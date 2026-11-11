@@ -1,76 +1,76 @@
-name: Build S3-NATIVE-AI Firmware
+name: Build S3-NATIVE-AI (2 fases)
 
 on:
   push:
     branches: [ main ]
   workflow_dispatch:
+    inputs:
+      build_modules:
+        description: 'Compilar módulos C (Fase 2)'
+        type: boolean
+        default: false
 
 env:
   MICROPYTHON_VERSION: v1.24.0
-  ESP_IDF_VERSION: v5.3.2
+  ESP_IDF_VERSION: v5.2.2
   BOARD: ESP32_S3_N16R8
+  BOARD_VARIANT: spiram-oct
+  # Fase 1 por defecto: sin módulos. Cambia a "true" para Fase 2.
+  BUILD_MODULES: ${{ github.event.inputs.build_modules || 'false' }}
 
 jobs:
   build:
     runs-on: ubuntu-22.04
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
         with:
           python-version: '3.10'
-
-      - name: Install system dependencies
+      - name: Instalar dependencias
         run: |
           sudo apt-get update
           sudo apt-get install -y git wget flex bison gperf python3-pip python3-venv \
             cmake ninja-build ccache libffi-dev libssl-dev dfu-util libusb-1.0-0
-
-      - name: Clone MicroPython
+      - name: Clonar MicroPython
         run: |
-          git clone --depth 1 --branch ${{ env.MICROPYTHON_VERSION }} https://github.com/micropython/micropython.git
-          cd micropython
-          git submodule update --init
-
-      - name: Clone and setup ESP-IDF
+          git clone --depth 1 --branch ${{ env.MICROPYTHON_VERSION }} \
+            https://github.com/micropython/micropython.git
+          cd micropython && git submodule update --init
+      - name: Clonar y configurar ESP-IDF
         run: |
-          git clone --depth 1 --branch ${{ env.ESP_IDF_VERSION }} https://github.com/espressif/esp-idf.git
-          cd esp-idf
-          ./install.sh esp32s3
-
-      - name: Prepare custom board configuration
+          git clone --depth 1 --branch ${{ env.ESP_IDF_VERSION }} \
+            https://github.com/espressif/esp-idf.git
+          cd esp-idf && ./install.sh esp32s3
+      - name: Copiar board y particiones
         run: |
           mkdir -p micropython/ports/esp32/boards/${{ env.BOARD }}
-          cp -r boards/${{ env.BOARD }}/* micropython/ports/esp32/boards/${{ env.BOARD }}/
-          cp boards/${{ env.BOARD }}/partitions-16MB.csv micropython/ports/esp32/
-
-      - name: Build MicroPython firmware
+          cp -r boards/${{ env.BOARD }}/* \
+            micropython/ports/esp32/boards/${{ env.BOARD }}/
+          cp boards/${{ env.BOARD }}/partitions-16MB.csv \
+            micropython/ports/esp32/
+      - name: Compilar firmware
         run: |
           source $GITHUB_WORKSPACE/esp-idf/export.sh
           cd $GITHUB_WORKSPACE/micropython/ports/esp32
-          
-          export USER_C_MODULES_FILE=${{ github.workspace }}/micropython.cmake
-          
-          make BOARD=${{ env.BOARD }} USER_C_MODULES=${USER_C_MODULES_FILE} clean || true
-          
-          # Ejecutar make y guardar TODA la salida en un archivo de log
-          if ! make BOARD=${{ env.BOARD }} USER_C_MODULES=${USER_C_MODULES_FILE} > build_output.log 2>&1; then
-            echo "========================================================"
-            echo "❌ ERROR DE COMPILACIÓN DETECTADO"
-            echo "========================================================"
-            echo "ÚLTIMAS 60 LÍNEAS DEL LOG DE COMPILACIÓN:"
-            echo "========================================================"
-            tail -n 60 build_output.log
-            echo "========================================================"
-            echo "FIN DEL LOG"
-            echo "========================================================"
-            exit 1
+
+          export USER_C_MODULES_FLAG=""
+          if [ "${{ env.BUILD_MODULES }}" = "true" ]; then
+            export USER_C_MODULES_FLAG="USER_C_MODULES=${{ github.workspace }}/micropython.cmake"
+            echo "🔧 FASE 2: compilando CON módulos C"
+          else
+            echo "🧱 FASE 1: compilando SIN módulos (solo base)"
           fi
 
-      - name: Upload firmware artifact
+          make BOARD=${{ env.BOARD }} \
+               BOARD_VARIANT=${{ env.BOARD_VARIANT }} \
+               $USER_C_MODULES_FLAG \
+               > build_output.log 2>&1 || {
+            echo "❌ ERROR DE COMPILACIÓN"
+            tail -n 60 build_output.log
+            exit 1
+          }
+      - name: Subir firmware
         uses: actions/upload-artifact@v4
         with:
-          name: s3-native-ai-firmware-${{ env.BOARD }}
+          name: s3-native-ai-${{ env.BOARD }}-${{ env.BUILD_MODULES }}
           path: micropython/ports/esp32/build-${{ env.BOARD }}/firmware.bin
