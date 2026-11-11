@@ -15,4 +15,3 @@ if(MICROPY_BOARD_VARIANT STREQUAL "spiram-oct")
         MICROPY_HW_BOARD_NAME="ESP32-S3 N16R8 (16MB Flash, 8MB PSRAM Octal)"
     )
 endif()
-

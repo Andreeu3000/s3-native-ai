@@ -6,4 +6,3 @@ target_include_directories(usermod_s3sys INTERFACE
     ${CMAKE_CURRENT_LIST_DIR}
 )
 target_link_libraries(usermod INTERFACE usermod_s3sys)
-
