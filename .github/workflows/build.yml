@@ -4,7 +4,7 @@ on:
   push:
     branches:
       - main
-  workflow_dispatch: {}
+  workflow_dispatch:
 
 env:
   MICROPYTHON_VERSION: v1.29.0
@@ -17,48 +17,91 @@ jobs:
     runs-on: ubuntu-22.04
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout project
+        uses: actions/checkout@v4
 
-      - uses: actions/setup-python@v5
+      - name: Setup Python
+        uses: actions/setup-python@v5
         with:
           python-version: '3.10'
 
       - name: Install system dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y git wget flex bison gperf python3-pip python3-venv cmake ninja-build ccache libffi-dev libssl-dev dfu-util libusb-1.0-0
+          sudo apt-get install -y \
+            git wget flex bison gperf \
+            python3-pip python3-venv \
+            cmake ninja-build ccache \
+            libffi-dev libssl-dev \
+            dfu-util libusb-1.0-0
 
       - name: Clone MicroPython
-        run: git clone -b ${{ env.MICROPYTHON_VERSION }} https://github.com/micropython/micropython.git
+        run: |
+          git clone \
+            --depth 1 \
+            --branch "$MICROPYTHON_VERSION" \
+            https://github.com/micropython/micropython.git
 
       - name: Clone and install ESP-IDF
         run: |
-          git clone -b ${{ env.ESP_IDF_VERSION }} --recursive https://github.com/espressif/esp-idf.git $HOME/esp-idf
-          cd $HOME/esp-idf
+          set -euo pipefail
+
+          git clone \
+            --depth 1 \
+            --branch "$ESP_IDF_VERSION" \
+            https://github.com/espressif/esp-idf.git \
+            "$HOME/esp-idf"
+
+          git -C "$HOME/esp-idf" submodule update \
+            --init --recursive --filter=tree:0
+
+          # ESP-IDF 5.5.2 references this directory in its
+          # ESP32-S3 MSPI timing tuning component.
+          mkdir -p \
+            "$HOME/esp-idf/components/esp_hw_support/mspi_timing_tuning/port/esp32s3/include"
+
+          cd "$HOME/esp-idf"
           ./install.sh esp32s3
 
-      - name: Add ESP-DSP component
+      - name: Add native components
         run: |
-          source $HOME/esp-idf/export.sh
-          cd micropython/ports/esp32
+          set -euo pipefail
+
+          source "$HOME/esp-idf/export.sh"
+
+          cd "$GITHUB_WORKSPACE/micropython/ports/esp32"
+
           idf.py add-dependency "espressif/esp-dsp==1.7.1"
-          idf.py add-dependency "espressif/quirc^1.2.0"
+          idf.py add-dependency "espressif/quirc==1.2.0~1"
 
-      - name: Build
+      - name: Build firmware
         run: |
-          set -o pipefail
-          source $HOME/esp-idf/export.sh
-          make -C micropython/mpy-cross
-          cd micropython/ports/esp32
-          make submodules
-          make BOARD=${{ env.BOARD }} BOARD_VARIANT=${{ env.BOARD_VARIANT }} USER_C_MODULES=${{ github.workspace }}/micropython.cmake 2>&1 | tee $GITHUB_WORKSPACE/build.log
+          set -euo pipefail
 
-      - name: Upload log
+          source "$HOME/esp-idf/export.sh"
+
+          cd "$GITHUB_WORKSPACE/micropython"
+
+          make -C mpy-cross
+
+          cd ports/esp32
+
+          make submodules
+
+          make \
+            BOARD="$BOARD" \
+            BOARD_VARIANT="$BOARD_VARIANT" \
+            USER_C_MODULES="$GITHUB_WORKSPACE/micropython.cmake" \
+            -j"$(nproc)" \
+            2>&1 | tee "$GITHUB_WORKSPACE/build.log"
+
+      - name: Upload build log
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: build-log
           path: build.log
+          if-no-files-found: warn
 
       - name: Upload firmware
         if: success()
