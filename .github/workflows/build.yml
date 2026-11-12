@@ -52,16 +52,19 @@ jobs:
             cd $HOME/esp-idf && ./install.sh esp32s3
           fi
 
+      - name: Prepare custom board configuration
+        run: |
+          # Copiamos nuestro sdkconfig.board personalizado sobre la placa oficial
+          cp boards/ESP32_GENERIC_S3/sdkconfig.board micropython/ports/esp32/boards/ESP32_GENERIC_S3/
+
       - name: Build MicroPython firmware
         run: |
           source $HOME/esp-idf/export.sh
           cd $GITHUB_WORKSPACE/micropython/ports/esp32
           
-          # Limpieza profunda para evitar residuos de builds anteriores
           make BOARD=${{ env.BOARD }} BOARD_VARIANT=${{ env.BOARD_VARIANT }} clean || true
           rm -rf build-${{ env.BOARD }}-${{ env.BOARD_VARIANT }}
           
-          # Compilación con la placa oficial y la variante Octal
           make BOARD=${{ env.BOARD }} \
                BOARD_VARIANT=${{ env.BOARD_VARIANT }} \
                USER_C_MODULES=${{ github.workspace }}/micropython.cmake \
