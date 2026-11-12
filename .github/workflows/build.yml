@@ -34,6 +34,7 @@ jobs:
           source $HOME/esp-idf/export.sh
           cd micropython/ports/esp32
           idf.py add-dependency "espressif/esp-dsp==1.7.1"
+        idf.py add-dependency "espressif/quirc^1.2.0"
       - name: Build
         run: |
           set -o pipefail

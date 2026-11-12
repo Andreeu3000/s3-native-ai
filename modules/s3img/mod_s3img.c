@@ -3,6 +3,7 @@
 #include <stdbool.h>
 #include <stddef.h>
 #include <string.h>
+#include <stdlib.h>
 
 #include "py/runtime.h"
 #include "py/obj.h"
@@ -184,8 +185,8 @@ static mp_obj_t img_sobel(
     return mp_const_none;
 }
 
-static MP_DEFINE_CONST_FUN_OBJ_4(
-    img_sobel_obj, img_sobel
+static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(
+    img_sobel_obj, 4, 4, img_sobel
 );
 
 /* Resize por vecino mas cercano */
