@@ -54,8 +54,7 @@ jobs:
 
       - name: Prepare custom board configuration
         run: |
-          cp boards/${{ env.BOARD }}/sdkconfig.board micropython/ports/esp32/boards/${{ env.BOARD }}/
-          cp boards/${{ env.BOARD }}/mpconfigboard.h micropython/ports/esp32/boards/${{ env.BOARD }}/
+          cat boards/${{ env.BOARD }}/sdkconfig.board >> micropython/ports/esp32/boards/${{ env.BOARD }}/sdkconfig.board
 
       - name: Build MicroPython firmware
         run: |
