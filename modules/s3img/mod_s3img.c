@@ -130,12 +130,15 @@ static MP_DEFINE_CONST_FUN_OBJ_3(
 );
 
 /* Sobel: deteccion de bordes sobre GRAY8 */
-static mp_obj_t img_sobel(
-    mp_obj_t src_obj,
-    mp_obj_t dst_obj,
-    mp_obj_t w_obj,
-    mp_obj_t h_obj
-) {
+static mp_obj_t img_sobel(size_t n_args, const mp_obj_t *args) {
+    if (n_args != 4) {
+        mp_raise_TypeError(MP_ERROR_TEXT("sobel(src,dst,width,height)"));
+    }
+
+    mp_obj_t src_obj = args[0];
+    mp_obj_t dst_obj = args[1];
+    mp_obj_t w_obj = args[2];
+    mp_obj_t h_obj = args[3];
     size_t sl, dl;
 
     uint8_t *src = get_u8(src_obj, &sl, false);

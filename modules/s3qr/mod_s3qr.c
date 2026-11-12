@@ -164,7 +164,7 @@ static mp_obj_t s3qr_decode(size_t n_args, const mp_obj_t *args) {
 
     for (int i = 0; i < ctx.result_count; i++) {
         mp_obj_t item = mp_obj_new_bytes(
-            (const char *)ctx.results[i].data,
+            (const byte *)ctx.results[i].data,
             ctx.results[i].len
         );
 
