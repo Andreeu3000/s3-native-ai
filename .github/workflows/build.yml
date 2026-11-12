@@ -9,7 +9,6 @@ env:
   MICROPYTHON_VERSION: v1.24.0
   ESP_IDF_VERSION: v5.2.2
   BOARD: ESP32_S3_N16R8
-  BOARD_VARIANT: spiram-oct
 
 jobs:
   build:
@@ -29,9 +28,6 @@ jobs:
           sudo apt-get install -y git wget flex bison gperf python3-pip python3-venv \
             cmake ninja-build ccache libffi-dev libssl-dev dfu-util libusb-1.0-0
 
-      # ---------------------------------------------------------
-      # CACHÉ: Esto evita descargar ESP-IDF y recompilar todo cada vez
-      # ---------------------------------------------------------
       - name: Cache ESP-IDF and Tools
         uses: actions/cache@v4
         with:
@@ -72,19 +68,14 @@ jobs:
           source $HOME/esp-idf/export.sh
           cd $GITHUB_WORKSPACE/micropython/ports/esp32
           
-          # Apuntamos al archivo micropython.cmake en la raíz del repo
           export USER_C_MODULES_FILE=${{ github.workspace }}/micropython.cmake
-          
-          # Habilitar ccache para acelerar
           export IDF_CCACHE_ENABLE=1
           
           make BOARD=${{ env.BOARD }} \
-               BOARD_VARIANT=${{ env.BOARD_VARIANT }} \
                USER_C_MODULES=${USER_C_MODULES_FILE} \
                clean || true
                
           if ! make BOARD=${{ env.BOARD }} \
-                    BOARD_VARIANT=${{ env.BOARD_VARIANT }} \
                     USER_C_MODULES=${USER_C_MODULES_FILE} \
                     -j$(nproc) > build_output.log 2>&1; then
             echo "========================================================"
