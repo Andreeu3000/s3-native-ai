@@ -29,6 +29,11 @@ jobs:
         run: |
           git clone -b ${{ env.ESP_IDF_VERSION }} --recursive https://github.com/espressif/esp-idf.git $HOME/esp-idf
           cd $HOME/esp-idf && ./install.sh esp32s3
+      - name: Add ESP-DSP component (pinned)
+        run: |
+          source $HOME/esp-idf/export.sh
+          cd micropython/ports/esp32
+          idf.py add-dependency "espressif/esp-dsp==1.7.1"
       - name: Build
         run: |
           set -o pipefail
