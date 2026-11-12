@@ -5,8 +5,8 @@ on:
   workflow_dispatch:
 
 env:
-  MICROPYTHON_VERSION: v1.24.0
-  ESP_IDF_VERSION: v5.2.2
+  MICROPYTHON_VERSION: v1.29.0
+  ESP_IDF_VERSION: v5.5.2
   BOARD: ESP32_GENERIC_S3
   BOARD_VARIANT: SPIRAM_OCT
 
@@ -24,30 +24,27 @@ jobs:
           sudo apt-get install -y git wget flex bison gperf python3-pip python3-venv \
             cmake ninja-build ccache libffi-dev libssl-dev dfu-util libusb-1.0-0
       - name: Clone MicroPython
+        run: git clone -b ${{ env.MICROPYTHON_VERSION }} https://github.com/micropython/micropython.git
+      - name: Clone and install ESP-IDF
         run: |
-          git clone --depth 1 --branch ${{ env.MICROPYTHON_VERSION }} https://github.com/micropython/micropython.git
-          cd micropython && git submodule update --init
-      - name: Clone and setup ESP-IDF
-        run: |
-          git clone --depth 1 --branch ${{ env.ESP_IDF_VERSION }} https://github.com/espressif/esp-idf.git $HOME/esp-idf
+          git clone -b ${{ env.ESP_IDF_VERSION }} --recursive https://github.com/espressif/esp-idf.git $HOME/esp-idf
           cd $HOME/esp-idf && ./install.sh esp32s3
-      - name: Append board config
+      - name: Build
         run: |
-          cat boards/${{ env.BOARD }}/sdkconfig.board >> micropython/ports/esp32/boards/${{ env.BOARD }}/sdkconfig.board
-      - name: Build (con parche TinyUSB)
-        run: |
+          set -o pipefail
           source $HOME/esp-idf/export.sh
-          cd $GITHUB_WORKSPACE/micropython/ports/esp32
-          MK="make BOARD=${{ env.BOARD }} BOARD_VARIANT=${{ env.BOARD_VARIANT }} USER_C_MODULES=${{ github.workspace }}/micropython.cmake -j$(nproc)"
-          # Pasada 1: descarga componentes (puede fallar)
-          $MK > build1.log 2>&1 || true
-          # Parche de la macro
-          grep -rl "CFG_TUD_CDC_EP_BUFSIZE" managed_components/ | tee patched.txt
-          xargs -r sed -i 's/CFG_TUD_CDC_EP_BUFSIZE/64/g' < patched.txt
-          grep -rn "tinyusb" managed_components/*/idf_component.yml | head -20 || true
-          # Pasada 2: sin clean
-          $MK > build2.log 2>&1 || { tail -n 80 build2.log; exit 1; }
-      - name: Upload firmware artifact
+          make -C micropython/mpy-cross
+          cd micropython/ports/esp32
+          make submodules
+          make BOARD=${{ env.BOARD }} BOARD_VARIANT=${{ env.BOARD_VARIANT }} \
+               USER_C_MODULES=${{ github.workspace }}/micropython.cmake 2>&1 | tee $GITHUB_WORKSPACE/build.log
+      - name: Upload log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-log
+          path: build.log
+      - name: Upload firmware
         uses: actions/upload-artifact@v4
         with:
           name: s3-native-ai-firmware-${{ env.BOARD }}
