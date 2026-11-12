@@ -1,8 +1,10 @@
 name: Build S3-NATIVE-AI Firmware
+
 on:
   push:
-    branches: [ main ]
-  workflow_dispatch:
+    branches:
+      - main
+  workflow_dispatch: {}
 
 env:
   MICROPYTHON_VERSION: v1.29.0
@@ -13,28 +15,34 @@ env:
 jobs:
   build:
     runs-on: ubuntu-22.04
+
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/setup-python@v5
         with:
           python-version: '3.10'
+
       - name: Install system dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y git wget flex bison gperf python3-pip python3-venv \
-            cmake ninja-build ccache libffi-dev libssl-dev dfu-util libusb-1.0-0
+          sudo apt-get install -y git wget flex bison gperf python3-pip python3-venv cmake ninja-build ccache libffi-dev libssl-dev dfu-util libusb-1.0-0
+
       - name: Clone MicroPython
         run: git clone -b ${{ env.MICROPYTHON_VERSION }} https://github.com/micropython/micropython.git
+
       - name: Clone and install ESP-IDF
         run: |
           git clone -b ${{ env.ESP_IDF_VERSION }} --recursive https://github.com/espressif/esp-idf.git $HOME/esp-idf
-          cd $HOME/esp-idf && ./install.sh esp32s3
-      - name: Add ESP-DSP component (pinned)
+          cd $HOME/esp-idf
+          ./install.sh esp32s3
+
+      - name: Add ESP-DSP component
         run: |
           source $HOME/esp-idf/export.sh
           cd micropython/ports/esp32
           idf.py add-dependency "espressif/esp-dsp==1.7.1"
-        idf.py add-dependency "espressif/quirc^1.2.0"
+
       - name: Build
         run: |
           set -o pipefail
@@ -42,16 +50,18 @@ jobs:
           make -C micropython/mpy-cross
           cd micropython/ports/esp32
           make submodules
-          make BOARD=${{ env.BOARD }} BOARD_VARIANT=${{ env.BOARD_VARIANT }} \
-               USER_C_MODULES=${{ github.workspace }}/micropython.cmake 2>&1 | tee $GITHUB_WORKSPACE/build.log
+          make BOARD=${{ env.BOARD }} BOARD_VARIANT=${{ env.BOARD_VARIANT }} USER_C_MODULES=${{ github.workspace }}/micropython.cmake 2>&1 | tee $GITHUB_WORKSPACE/build.log
+
       - name: Upload log
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: build-log
           path: build.log
+
       - name: Upload firmware
+        if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: s3-native-ai-firmware-${{ env.BOARD }}
+          name: s3-native-ai-firmware
           path: micropython/ports/esp32/build-${{ env.BOARD }}-${{ env.BOARD_VARIANT }}/firmware.bin
