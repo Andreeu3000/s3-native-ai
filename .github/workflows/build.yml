@@ -8,7 +8,8 @@ on:
 env:
   MICROPYTHON_VERSION: v1.24.0
   ESP_IDF_VERSION: v5.2.2
-  BOARD: ESP32_S3_N16R8
+  BOARD: ESP32_GENERIC_S3
+  BOARD_VARIANT: SPIRAM_OCT
 
 jobs:
   build:
@@ -36,12 +37,6 @@ jobs:
             ~/esp-idf
           key: esp-idf-${{ env.ESP_IDF_VERSION }}-${{ runner.os }}
 
-      - name: Cache ccache
-        uses: actions/cache@v4
-        with:
-          path: ~/.ccache
-          key: ccache-${{ env.BOARD }}-${{ hashFiles('modules/**') }}
-
       - name: Clone MicroPython
         run: |
           git clone --depth 1 --branch ${{ env.MICROPYTHON_VERSION }} https://github.com/micropython/micropython.git
@@ -57,27 +52,20 @@ jobs:
             cd $HOME/esp-idf && ./install.sh esp32s3
           fi
 
-      - name: Prepare custom board configuration
-        run: |
-          mkdir -p micropython/ports/esp32/boards/${{ env.BOARD }}
-          cp -r boards/${{ env.BOARD }}/* micropython/ports/esp32/boards/${{ env.BOARD }}/
-          cp boards/${{ env.BOARD }}/partitions-16MB.csv micropython/ports/esp32/
-
       - name: Build MicroPython firmware
         run: |
           source $HOME/esp-idf/export.sh
           cd $GITHUB_WORKSPACE/micropython/ports/esp32
           
-          export USER_C_MODULES_FILE=${{ github.workspace }}/micropython.cmake
-          export IDF_CCACHE_ENABLE=1
+          # Limpieza profunda para evitar residuos de builds anteriores
+          make BOARD=${{ env.BOARD }} BOARD_VARIANT=${{ env.BOARD_VARIANT }} clean || true
+          rm -rf build-${{ env.BOARD }}-${{ env.BOARD_VARIANT }}
           
+          # Compilación con la placa oficial y la variante Octal
           make BOARD=${{ env.BOARD }} \
-               USER_C_MODULES=${USER_C_MODULES_FILE} \
-               clean || true
-               
-          if ! make BOARD=${{ env.BOARD }} \
-                    USER_C_MODULES=${USER_C_MODULES_FILE} \
-                    -j$(nproc) > build_output.log 2>&1; then
+               BOARD_VARIANT=${{ env.BOARD_VARIANT }} \
+               USER_C_MODULES=${{ github.workspace }}/micropython.cmake \
+               -j$(nproc) > build_output.log 2>&1 || {
             echo "========================================================"
             echo "❌ ERROR DE COMPILACIÓN DETECTADO"
             echo "========================================================"
@@ -86,26 +74,13 @@ jobs:
             echo "FIN DEL LOG"
             echo "========================================================"
             exit 1
-          fi
+          }
 
-      - name: Generate Flash Command Helper
-        run: |
-          BUILD_DIR="micropython/ports/esp32/build-${{ env.BOARD }}"
-          cat << 'CMD' > $BUILD_DIR/FLASH_COMMAND.txt
-          esptool.py --chip esp32s3 -p /dev/ttyUSB0 -b 460800 \
-            --before default_reset --after hard_reset \
-            write_flash --flash_mode dio --flash_size 16MB --flash_freq 80m \
-            0x0 bootloader.bin \
-            0x8000 partition-table.bin \
-            0x10000 firmware.bin
-          CMD
-
-      - name: Upload all firmware artifacts
+      - name: Upload firmware artifact
         uses: actions/upload-artifact@v4
         with:
-          name: s3-native-ai-binarios-${{ env.BOARD }}
+          name: s3-native-ai-firmware-${{ env.BOARD }}
           path: |
-            micropython/ports/esp32/build-${{ env.BOARD }}/firmware.bin
-            micropython/ports/esp32/build-${{ env.BOARD }}/bootloader.bin
-            micropython/ports/esp32/build-${{ env.BOARD }}/partition-table.bin
-            micropython/ports/esp32/build-${{ env.BOARD }}/FLASH_COMMAND.txt
+            micropython/ports/esp32/build-${{ env.BOARD }}-${{ env.BOARD_VARIANT }}/firmware.bin
+            micropython/ports/esp32/build-${{ env.BOARD }}-${{ env.BOARD_VARIANT }}/bootloader.bin
+            micropython/ports/esp32/build-${{ env.BOARD }}-${{ env.BOARD_VARIANT }}/partition-table.bin
