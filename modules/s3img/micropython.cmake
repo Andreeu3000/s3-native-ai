@@ -13,6 +13,7 @@ target_include_directories(usermod_s3img INTERFACE
 target_compile_definitions(usermod_s3img INTERFACE
     LODEPNG_NO_COMPILE_DISK
     LODEPNG_NO_COMPILE_CPP
+    LODEPNG_NO_COMPILE_ENCODER
 )
 
 target_link_libraries(usermod INTERFACE usermod_s3img)
