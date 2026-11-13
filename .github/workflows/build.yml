@@ -141,7 +141,7 @@ jobs:
         with:
           name: s3-native-ai-debug-symbols
           path: |
-            micropython/ports/esp32/build-${{ env.BOARD }}-${{ env.BOARD_VARIANT }}/firmware.elf
+            micropython/ports/esp32/build-${{ env.BOARD }}-${{ env.BOARD_VARIANT }}/micropython.elf
             micropython/ports/esp32/build-${{ env.BOARD }}-${{ env.BOARD_VARIANT }}/*.map
           if-no-files-found: warn
 
