@@ -71,21 +71,11 @@ static void *s3img_realloc(void *ptr, size_t size) {
         return NULL;
     }
 
-    void *result = heap_caps_realloc(
-        ptr,
-        size,
-        MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT
-    );
+    uint32_t caps = esp_ptr_external_ram(ptr)
+        ? MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT
+        : MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT;
 
-    if (result == NULL) {
-        result = heap_caps_realloc(
-            ptr,
-            size,
-            MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT
-        );
-    }
-
-    return result;
+    return heap_caps_realloc(ptr, size, caps);
 }
 
 static void s3img_free(void *ptr) {
@@ -312,10 +302,135 @@ static MP_DEFINE_CONST_FUN_OBJ_1(
     s3img_convert_gray
 );
 
+
+/* Resize Image using nearest-neighbor interpolation. */
+static mp_obj_t s3img_resize(
+    mp_obj_t self_in,
+    mp_obj_t width_obj,
+    mp_obj_t height_obj
+) {
+    s3img_image_t *src = MP_OBJ_TO_PTR(self_in);
+
+    if (src->pixels == NULL) {
+        mp_raise_ValueError(
+            MP_ERROR_TEXT("image has no pixel data")
+        );
+    }
+
+    if (
+        src->width == 0 ||
+        src->height == 0 ||
+        src->width > S3IMG_MAX_WIDTH ||
+        src->height > S3IMG_MAX_HEIGHT ||
+        (uint64_t)src->width * src->height > S3IMG_MAX_PIXELS
+    ) {
+        mp_raise_ValueError(
+            MP_ERROR_TEXT("invalid source image dimensions")
+        );
+    }
+
+    mp_int_t dw = mp_obj_get_int(width_obj);
+    mp_int_t dh = mp_obj_get_int(height_obj);
+
+    if (
+        dw <= 0 || dh <= 0 ||
+        dw > S3IMG_MAX_WIDTH ||
+        dh > S3IMG_MAX_HEIGHT
+    ) {
+        mp_raise_ValueError(
+            MP_ERROR_TEXT("invalid resize dimensions")
+        );
+    }
+
+    uint64_t dst_pixels = (uint64_t)dw * dh;
+
+    if (dst_pixels > S3IMG_MAX_PIXELS) {
+        mp_raise_ValueError(
+            MP_ERROR_TEXT("resized image exceeds pixel limit")
+        );
+    }
+
+    unsigned channels;
+
+    if (src->mode == S3IMG_MODE_RGBA8888) {
+        channels = 4;
+    } else if (src->mode == S3IMG_MODE_GRAY8) {
+        channels = 1;
+    } else {
+        mp_raise_ValueError(
+            MP_ERROR_TEXT("unsupported image mode")
+        );
+    }
+
+    size_t expected_src_bytes =
+        (size_t)src->width * src->height * channels;
+
+    if (src->nbytes != expected_src_bytes) {
+        mp_raise_ValueError(
+            MP_ERROR_TEXT("invalid source image buffer size")
+        );
+    }
+
+    size_t dst_bytes = (size_t)dst_pixels * channels;
+
+    s3img_image_t *dst = s3img_new_image();
+
+    dst->pixels = s3img_malloc(dst_bytes);
+
+    if (dst->pixels == NULL) {
+        mp_raise_msg(
+            &mp_type_MemoryError,
+            MP_ERROR_TEXT("cannot allocate resized image")
+        );
+    }
+
+    dst->width = (uint32_t)dw;
+    dst->height = (uint32_t)dh;
+    dst->mode = src->mode;
+    dst->nbytes = dst_bytes;
+
+    for (int y = 0; y < dh; y++) {
+        uint32_t sy = (uint32_t)(
+            (uint64_t)y * src->height / dh
+        );
+
+        for (int x = 0; x < dw; x++) {
+            uint32_t sx = (uint32_t)(
+                (uint64_t)x * src->width / dw
+            );
+
+            size_t si = (
+                (size_t)sy * src->width + sx
+            ) * channels;
+
+            size_t di = (
+                (size_t)y * dw + x
+            ) * channels;
+
+            memcpy(
+                dst->pixels + di,
+                src->pixels + si,
+                channels
+            );
+        }
+    }
+
+    return MP_OBJ_FROM_PTR(dst);
+}
+
+static MP_DEFINE_CONST_FUN_OBJ_3(
+    s3img_resize_obj,
+    s3img_resize
+);
+
 static const mp_rom_map_elem_t s3img_image_locals_table[] = {
     {
         MP_ROM_QSTR(MP_QSTR_convert_gray),
         MP_ROM_PTR(&s3img_convert_gray_obj)
+    },
+    {
+        MP_ROM_QSTR(MP_QSTR_resize),
+        MP_ROM_PTR(&s3img_resize_obj)
     },
     {
         MP_ROM_QSTR(MP_QSTR___del__),
