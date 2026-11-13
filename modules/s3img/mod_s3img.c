@@ -273,8 +273,5 @@ const mp_obj_module_t s3img_user_cmodule = {
     .globals = (mp_obj_dict_t *)&img_globals,
 };
 
-MP_REGISTER_MODULE(
-    MP_QSTR_s3img,
-    s3img_user_cmodule
-);
+MP_REGISTER_MODULE(MP_QSTR_s3img, s3img_user_cmodule);
 
