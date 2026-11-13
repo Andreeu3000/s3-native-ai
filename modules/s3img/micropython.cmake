@@ -14,6 +14,7 @@ target_compile_definitions(usermod_s3img INTERFACE
     LODEPNG_NO_COMPILE_DISK
     LODEPNG_NO_COMPILE_CPP
     LODEPNG_NO_COMPILE_ENCODER
+    LODEPNG_NO_COMPILE_ALLOCATORS
 )
 
 target_link_libraries(usermod INTERFACE usermod_s3img)
