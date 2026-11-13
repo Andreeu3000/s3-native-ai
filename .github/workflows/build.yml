@@ -95,6 +95,38 @@ jobs:
             -j"$(nproc)" \
             2>&1 | tee "$GITHUB_WORKSPACE/build.log"
 
+      - name: Inspect generated module registration
+        if: always()
+        run: |
+          GENHDR="$GITHUB_WORKSPACE/micropython/ports/esp32/build-${BOARD}-${BOARD_VARIANT}/genhdr"
+
+          echo "===== MODULEDEFS ====="
+          if [ -f "$GENHDR/moduledefs.h" ]; then
+            grep -n -E 's3img|s3qr' "$GENHDR/moduledefs.h" || true
+          else
+            echo "moduledefs.h no encontrado"
+          fi
+
+          echo "===== QSTR DEFINITIONS ====="
+          if [ -f "$GENHDR/qstrdefs.generated.h" ]; then
+            grep -n -E 's3img|s3qr' "$GENHDR/qstrdefs.generated.h" || true
+          else
+            echo "qstrdefs.generated.h no encontrado"
+          fi
+
+          echo "===== GENERATED FILES ====="
+          ls -lh "$GENHDR" || true
+
+      - name: Upload module registration diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: module-registration-debug
+          path: |
+            micropython/ports/esp32/build-${{ env.BOARD }}-${{ env.BOARD_VARIANT }}/genhdr/moduledefs.h
+            micropython/ports/esp32/build-${{ env.BOARD }}-${{ env.BOARD_VARIANT }}/genhdr/qstrdefs.generated.h
+          if-no-files-found: warn
+
       - name: Upload build log
         if: always()
         uses: actions/upload-artifact@v4
