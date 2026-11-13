@@ -369,11 +369,16 @@ static mp_obj_t s3img_load(mp_obj_t path_obj) {
         mp_obj_new_str("rb", 2)
     };
 
+    mp_map_t kw_args;
+    mp_map_init(&kw_args, 0);
+
     mp_obj_t file = mp_vfs_open(
         2,
         open_args,
-        NULL
+        &kw_args
     );
+
+    mp_map_deinit(&kw_args);
 
     uint8_t *file_data = s3img_malloc(4096);
     size_t file_capacity = 4096;
