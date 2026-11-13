@@ -34,7 +34,7 @@ typedef struct {
     uint8_t mode;
 } s3img_image_t;
 
-static const mp_obj_type_t s3img_image_type;
+extern const mp_obj_type_t s3img_image_type;
 
 /* =========================================================
  * MEMORY
